@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { getUsers, saveUsers } = require('./config/db');
+const { getUsers, saveUsers } = require('../config/db');
 
 const generateToken = (user) => {
   return jwt.sign(
