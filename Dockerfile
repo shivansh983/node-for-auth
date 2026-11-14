@@ -1,4 +1,9 @@
-FROM node:20-alpine
+FROM node:20-slim
+
+# libreoffice turns office files into pdf
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libreoffice-writer libreoffice-calc libreoffice-impress \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

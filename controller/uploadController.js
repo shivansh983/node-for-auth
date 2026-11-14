@@ -1,7 +1,9 @@
+const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const UPLOADS_DIR = path.join(__dirname, '../uploads');
+const PREVIEW_DIR = path.join(UPLOADS_DIR, 'preview');
 
 // POST /api/upload
 const uploadPdf = (req, res) => {
@@ -28,7 +30,7 @@ const getFiles = (req, res) => {
 
   const files = fs
     .readdirSync(UPLOADS_DIR)
-    .filter((name) => /\.(pdf|doc|docx|txt)$/i.test(name))
+    .filter((name) => /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|jpe?g|png|webp|gif)$/i.test(name))
     .map((name) => {
       const stats = fs.statSync(path.join(UPLOADS_DIR, name));
       return {
@@ -43,4 +45,40 @@ const getFiles = (req, res) => {
   res.json({ files });
 };
 
-module.exports = { uploadPdf, getFiles };
+// office file -> pdf so the app can show it
+const previewFile = (req, res) => {
+  const name = path.basename(req.params.name);
+  const source = path.join(UPLOADS_DIR, name);
+
+  if (!fs.existsSync(source)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  // pdf and images need no converting
+  if (/\.(pdf|jpe?g|png|webp|gif)$/i.test(name)) {
+    return res.sendFile(source);
+  }
+
+  const outPath = path.join(PREVIEW_DIR, name.replace(/\.[^.]+$/, '.pdf'));
+
+  // converted earlier
+  if (fs.existsSync(outPath)) {
+    return res.sendFile(outPath);
+  }
+
+  fs.mkdirSync(PREVIEW_DIR, { recursive: true });
+
+  execFile(
+    'soffice',
+    ['--headless', '--convert-to', 'pdf', '--outdir', PREVIEW_DIR, source],
+    { timeout: 60000 },
+    (err) => {
+      if (err || !fs.existsSync(outPath)) {
+        return res.status(500).json({ error: 'Could not convert this file' });
+      }
+      res.sendFile(outPath);
+    },
+  );
+};
+
+module.exports = { uploadPdf, getFiles, previewFile };

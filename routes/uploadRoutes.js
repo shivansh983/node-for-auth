@@ -2,7 +2,11 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const router = express.Router();
-const { uploadPdf, getFiles } = require('../controller/uploadController');
+const {
+  uploadPdf,
+  getFiles,
+  previewFile,
+} = require('../controller/uploadController');
 
 // multer storage
 const storage = multer.diskStorage({
@@ -24,10 +28,18 @@ const ALLOWED = [
   'application/pdf',
   'application/msword', // .doc
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/vnd.ms-excel', // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-powerpoint', // .ppt
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
   'text/plain',
 ];
 
-const ALLOWED_EXT = /\.(pdf|doc|docx|txt)$/i;
+const ALLOWED_EXT = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|jpe?g|png|webp|gif)$/i;
 
 const fileFilter = (req, file, cb) => {
   // phones send octet-stream sometimes
@@ -37,7 +49,7 @@ const fileFilter = (req, file, cb) => {
   if (ok) {
     cb(null, true);
   } else {
-    cb(new Error('Only PDF, Word and text files are allowed'));
+    cb(new Error('Only PDF, Office, image and text files are allowed'));
   }
 };
 
@@ -50,6 +62,7 @@ const upload = multer({
 // routes
 router.post('/', upload.single('file'), uploadPdf);
 router.get('/', getFiles);
+router.get('/preview/:name', previewFile);
 
 // multer errors
 router.use((err, req, res, next) => {
