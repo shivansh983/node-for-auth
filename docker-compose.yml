@@ -3,17 +3,17 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DB:-uploads}
+      - POSTGRES_USER=${DB_USERNAME:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
+      - POSTGRES_DB=${DB_NAME:-native_upload}
     # for pgAdmin
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - '${DB_HOST_PORT:-5433}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
     # wait for postgres
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres}']
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USERNAME:-postgres}']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,9 +27,14 @@ services:
     environment:
       - PORT=${PORT:-5000}
       - MAX_UPLOAD_MB=${MAX_UPLOAD_MB:-10}
-      - JWT_SECRET=${JWT_SECRET}
+      - DB_NAME=${DB_NAME:-native_upload}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
       # db = service name
-      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-uploads}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_DIALECT=postgres
+      - DB_LOGGING=${DB_LOGGING:-false}
     ports:
       - '${HOST_PORT:-5000}:${PORT:-5000}'
     volumes:

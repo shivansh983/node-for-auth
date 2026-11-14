@@ -1,59 +1,88 @@
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { query } = require('../config/db');
-
-const UPLOADS_DIR = path.join(__dirname, '../uploads');
-const PREVIEW_DIR = path.join(UPLOADS_DIR, 'preview');
+const { FileAsset } = require('../models');
+const {
+  UPLOADS_DIR,
+  PREVIEW_DIR,
+  renameOnDisk,
+  clearPreview,
+} = require('../lib/files');
 
 // POST /api/upload
-const uploadPdf = async (req, res) => {
+const uploadFile = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file was uploaded' });
   }
 
-  const result = await query(
-    `INSERT INTO files (name, saved_as, size)
-     VALUES ($1, $2, $3)
-     RETURNING id, name, saved_as, size, uploaded_at`,
-    [req.file.originalname, req.file.filename, req.file.size]
-  );
+  // app can send a name
+  const typed = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+  const display = typed || req.file.originalname;
 
-  const row = result.rows[0];
+  let savedAs = req.file.filename;
 
-  res.status(201).json({
-    message: 'File uploaded!',
-    file: {
-      id: row.id,
-      name: row.name,
-      savedAs: row.saved_as,
-      size: row.size,
-      url: `/uploads/${row.saved_as}`,
-    },
+  try {
+    savedAs = renameOnDisk(savedAs, display);
+  } catch (err) {
+    console.error('Could not rename upload:', err.message);
+  }
+
+  const row = await FileAsset.create({
+    name: display,
+    originalName: req.file.originalname,
+    savedAs,
+    mimeType: req.file.mimetype,
+    size: req.file.size,
   });
+
+  res.status(201).json({ message: 'File uploaded!', file: row.toJSON() });
 };
 
 // GET /api/upload
 const getFiles = async (req, res) => {
-  const result = await query(
-    `SELECT id, name, saved_as, size, uploaded_at
-     FROM files
-     ORDER BY uploaded_at DESC`
-  );
-
-  const files = result.rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    savedAs: row.saved_as,
-    size: row.size,
-    uploadedAt: row.uploaded_at,
-    url: `/uploads/${row.saved_as}`,
-  }));
-
-  res.json({ files });
+  const rows = await FileAsset.findAll({ order: [['createdAt', 'DESC']] });
+  res.json({ files: rows.map((row) => row.toJSON()) });
 };
 
-// office -> pdf
+// PATCH /api/upload/:id
+const renameFile = async (req, res) => {
+  const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+
+  if (!name) {
+    return res.status(400).json({ error: 'Please enter a name' });
+  }
+
+  const row = await FileAsset.findByPk(req.params.id);
+  if (!row) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  // move on disk too
+  if (fs.existsSync(path.join(UPLOADS_DIR, row.savedAs))) {
+    row.savedAs = renameOnDisk(row.savedAs, name);
+  }
+
+  row.name = name;
+  await row.save();
+
+  res.json({ message: 'Renamed', file: row.toJSON() });
+};
+
+// DELETE /api/upload/:id
+const deleteFile = async (req, res) => {
+  const row = await FileAsset.findByPk(req.params.id);
+  if (!row) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  fs.rmSync(path.join(UPLOADS_DIR, row.savedAs), { force: true });
+  clearPreview(row.savedAs);
+  await row.destroy();
+
+  res.json({ message: 'Deleted', id: Number(req.params.id) });
+};
+
+// office -> pdf for the viewer
 const previewFile = (req, res) => {
   const name = path.basename(req.params.name);
   const source = path.join(UPLOADS_DIR, name);
@@ -82,11 +111,19 @@ const previewFile = (req, res) => {
     { timeout: 60000 },
     (err) => {
       if (err || !fs.existsSync(outPath)) {
-        return res.status(500).json({ error: 'Could not convert this file' });
+        return res
+          .status(500)
+          .json({ error: 'Could not convert this file for preview' });
       }
       res.sendFile(outPath);
     },
   );
 };
 
-module.exports = { uploadPdf, getFiles, previewFile };
+module.exports = {
+  uploadFile,
+  getFiles,
+  renameFile,
+  deleteFile,
+  previewFile,
+};

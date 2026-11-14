@@ -1,22 +1,23 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
 const router = express.Router();
 const {
-  uploadPdf,
+  uploadFile,
   getFiles,
+  renameFile,
+  deleteFile,
   previewFile,
 } = require('../controller/uploadController');
+const { UPLOADS_DIR, safeName } = require('../lib/files');
 
 // multer storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../uploads'));
+    cb(null, UPLOADS_DIR);
   },
   filename: (req, file, cb) => {
-    // unique name
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    cb(null, `${Date.now()}-${safeName}`);
+    // temp name, controller renames it
+    cb(null, `${Date.now()}-${safeName(file.originalname)}`);
   },
 });
 
@@ -60,8 +61,10 @@ const upload = multer({
 });
 
 // routes
-router.post('/', upload.single('file'), uploadPdf);
+router.post('/', upload.single('file'), uploadFile);
 router.get('/', getFiles);
+router.patch('/:id', renameFile);
+router.delete('/:id', deleteFile);
 router.get('/preview/:name', previewFile);
 
 // errors
@@ -73,7 +76,12 @@ router.use((err, req, res, next) => {
     console.error('Upload error:', err.message);
   }
 
-  res.status(badFile ? 400 : 500).json({ error: err.message });
+  const message =
+    err.code === 'LIMIT_FILE_SIZE'
+      ? `File is too large. The limit is ${MAX_MB} MB.`
+      : err.message;
+
+  res.status(badFile ? 400 : 500).json({ error: message });
 });
 
 module.exports = router;

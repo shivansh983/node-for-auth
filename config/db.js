@@ -1,32 +1,28 @@
-const { Pool } = require('pg');
+const { Sequelize } = require('sequelize');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const required = ['DB_NAME', 'DB_USERNAME', 'DB_HOST'];
+const missing = required.filter((key) => !process.env[key]);
 
-// query helper
-const query = (text, params) => pool.query(text, params);
+if (missing.length) {
+  console.error(`Missing in .env: ${missing.join(', ')}`);
+  console.error('Copy .env.example to .env and fill it in.');
+  process.exit(1);
+}
 
-// tables
-const initDb = async () => {
-  await query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+const sequelize = new Sequelize(
+  process.env.DB_NAME,
+  process.env.DB_USERNAME,
+  process.env.DB_PASSWORD,
+  {
+    host: process.env.DB_HOST,
+    port: Number(process.env.DB_PORT) || 5432,
+    dialect: process.env.DB_DIALECT || 'postgres',
+    logging: process.env.DB_LOGGING === 'true' ? console.log : false,
+    define: {
+      // created_at, not createdAt
+      underscored: true,
+    },
+  },
+);
 
-  await query(`
-    CREATE TABLE IF NOT EXISTS files (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      saved_as TEXT NOT NULL,
-      size INTEGER NOT NULL,
-      uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-};
-
-module.exports = { query, initDb, pool };
+module.exports = { sequelize };
