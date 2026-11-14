@@ -1,51 +1,59 @@
 const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { query } = require('../config/db');
 
 const UPLOADS_DIR = path.join(__dirname, '../uploads');
 const PREVIEW_DIR = path.join(UPLOADS_DIR, 'preview');
 
 // POST /api/upload
-const uploadPdf = (req, res) => {
+const uploadPdf = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file was uploaded' });
   }
 
+  const result = await query(
+    `INSERT INTO files (name, saved_as, size)
+     VALUES ($1, $2, $3)
+     RETURNING id, name, saved_as, size, uploaded_at`,
+    [req.file.originalname, req.file.filename, req.file.size]
+  );
+
+  const row = result.rows[0];
+
   res.status(201).json({
     message: 'File uploaded!',
     file: {
-      name: req.file.originalname,
-      savedAs: req.file.filename,
-      size: req.file.size,
-      url: `/uploads/${req.file.filename}`,
+      id: row.id,
+      name: row.name,
+      savedAs: row.saved_as,
+      size: row.size,
+      url: `/uploads/${row.saved_as}`,
     },
   });
 };
 
 // GET /api/upload
-const getFiles = (req, res) => {
-  if (!fs.existsSync(UPLOADS_DIR)) {
-    return res.json({ files: [] });
-  }
+const getFiles = async (req, res) => {
+  const result = await query(
+    `SELECT id, name, saved_as, size, uploaded_at
+     FROM files
+     ORDER BY uploaded_at DESC`
+  );
 
-  const files = fs
-    .readdirSync(UPLOADS_DIR)
-    .filter((name) => /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|jpe?g|png|webp|gif)$/i.test(name))
-    .map((name) => {
-      const stats = fs.statSync(path.join(UPLOADS_DIR, name));
-      return {
-        name,
-        size: stats.size,
-        uploadedAt: stats.mtime,
-        url: `/uploads/${name}`,
-      };
-    })
-    .sort((a, b) => b.uploadedAt - a.uploadedAt);
+  const files = result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    savedAs: row.saved_as,
+    size: row.size,
+    uploadedAt: row.uploaded_at,
+    url: `/uploads/${row.saved_as}`,
+  }));
 
   res.json({ files });
 };
 
-// office file -> pdf so the app can show it
+// office -> pdf
 const previewFile = (req, res) => {
   const name = path.basename(req.params.name);
   const source = path.join(UPLOADS_DIR, name);
@@ -54,7 +62,7 @@ const previewFile = (req, res) => {
     return res.status(404).json({ error: 'File not found' });
   }
 
-  // pdf and images need no converting
+  // no convert needed
   if (/\.(pdf|jpe?g|png|webp|gif)$/i.test(name)) {
     return res.sendFile(source);
   }

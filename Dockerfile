@@ -1,6 +1,6 @@
 FROM node:20-slim
 
-# libreoffice turns office files into pdf
+# office -> pdf
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libreoffice-writer libreoffice-calc libreoffice-impress \
     && rm -rf /var/lib/apt/lists/*

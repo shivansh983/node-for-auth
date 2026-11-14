@@ -42,7 +42,7 @@ const ALLOWED = [
 const ALLOWED_EXT = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|jpe?g|png|webp|gif)$/i;
 
 const fileFilter = (req, file, cb) => {
-  // phones send octet-stream sometimes
+  // phones send octet-stream
   const ok =
     ALLOWED.includes(file.mimetype) || ALLOWED_EXT.test(file.originalname);
 
@@ -64,9 +64,16 @@ router.post('/', upload.single('file'), uploadPdf);
 router.get('/', getFiles);
 router.get('/preview/:name', previewFile);
 
-// multer errors
+// errors
 router.use((err, req, res, next) => {
-  res.status(400).json({ error: err.message });
+  const badFile =
+    err instanceof multer.MulterError || /allowed/i.test(err.message);
+
+  if (!badFile) {
+    console.error('Upload error:', err.message);
+  }
+
+  res.status(badFile ? 400 : 500).json({ error: err.message });
 });
 
 module.exports = router;

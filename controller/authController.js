@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { getUsers, saveUsers } = require('../config/db');
+const { query } = require('../config/db');
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -17,32 +17,35 @@ const registerUser = async (req, res) => {
     return res.status(400).json({ error: 'Please enter both email and password' });
   }
 
-  const users = getUsers();
-  const existingUser = users.find((u) => u.email === email.toLowerCase());
-  if (existingUser) {
+  const existing = await query('SELECT id FROM users WHERE email = $1', [
+    email.toLowerCase(),
+  ]);
+
+  if (existing.rows.length > 0) {
     return res.status(400).json({ error: 'User already exists!' });
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const newUser = {
-    id: Date.now().toString(),
-    email: email.toLowerCase(),
-    password: hashedPassword,
-  };
+  const result = await query(
+    'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email',
+    [email.toLowerCase(), hashedPassword]
+  );
 
-  users.push(newUser);
-  saveUsers(users);
-
+  const newUser = result.rows[0];
   const token = generateToken(newUser);
-  res.status(201).json({ token, user: { id: newUser.id, email: newUser.email } });
+
+  res.status(201).json({ token, user: newUser });
 };
 
 const loginUser = async (req, res) => {
   const { email, password } = req.body;
-  const users = getUsers();
 
-  const user = users.find((u) => u.email === email?.toLowerCase());
+  const result = await query('SELECT * FROM users WHERE email = $1', [
+    email?.toLowerCase(),
+  ]);
+
+  const user = result.rows[0];
   if (!user) {
     return res.status(400).json({ error: 'Invalid email or password' });
   }
