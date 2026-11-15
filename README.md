@@ -67,11 +67,14 @@ Needs **Node 20+** and a **PostgreSQL** server you can log into.
 npm install
 cp .env.example .env     # then put your real postgres password in it
 npm run db:create        # creates the database named in DB_NAME
+npm run db:migrate       # creates the files table
+npm run db:seed          # optional, three sample files
 npm run dev              # or: npm start
 ```
 
 `db:create` is only needed on the non-Docker path — the Docker image creates
-the database itself. The `files` table is created automatically on every boot.
+the database itself. Migrations run on every container start, so Docker needs
+none of this.
 
 ---
 
@@ -146,7 +149,7 @@ Errors return `{ "error": "..." }`, which the app shows to the user as is.
 
 ## The `files` table
 
-Created by Sequelize on boot (`models/file.js`).
+Created by the migration in `migrations/`, mapped in `models/file.js`.
 
 | Column          | Type          | Notes                                      |
 | --------------- | ------------- | ------------------------------------------ |

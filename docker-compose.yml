@@ -39,6 +39,8 @@ services:
       - '${HOST_PORT:-5000}:${PORT:-5000}'
     volumes:
       - uploads:/app/uploads
+    # migrate, then serve
+    command: sh -c "npm run db:migrate && node server.js"
 
 volumes:
   uploads:

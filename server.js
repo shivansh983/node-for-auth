@@ -30,10 +30,8 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 const start = async () => {
+  // migrations own the schema
   await sequelize.authenticate();
-
-  // makes the files table if missing
-  await sequelize.sync({ alter: true });
   console.log(`postgres connected (${process.env.DB_NAME})`);
 
   app.listen(PORT, '0.0.0.0', () => {
