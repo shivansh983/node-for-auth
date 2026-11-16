@@ -90,16 +90,20 @@ Everything lives in `.env`. Copy `.env.example` and edit it.
 | `DB_NAME`       | `native_upload` | database name                                       |
 | `DB_USERNAME`   | `postgres`      | database user                                       |
 | `DB_PASSWORD`   | `postgres`      | database password                                   |
-| `DB_HOST`       | `localhost`     | `localhost` without Docker, `db` is set for you with it |
-| `DB_PORT`       | `5432`          | port Postgres listens on                            |
+| `DB_HOST`       | `localhost`     | non-Docker path only — where your own Postgres runs  |
+| `DB_PORT`       | `5432`          | non-Docker path only — port it listens on           |
 | `DB_DIALECT`    | `postgres`      | Sequelize dialect                                   |
 | `DB_HOST_PORT`  | `5433`          | Docker only — look into the container's Postgres    |
+| `DB_HOST_DOCKER` | *(blank)*      | Docker only — blank uses the bundled Postgres, or set your own host |
+| `DB_PORT_DOCKER` | *(blank)*      | Docker only — port of that database, blank means `5432` |
 | `DB_LOGGING`    | `false`         | `true` prints every SQL query                       |
 
 Two notes that save time:
 
-- **`DB_HOST` is the one to get right.** With Docker, compose sets it to `db`
-  (the service name) for you. Running Node yourself, it is `localhost`.
+- **`DB_HOST` is the one to get right.** Running Node yourself, it is
+  `localhost`. With Docker it is ignored — compose uses `DB_HOST_DOCKER`, and
+  falls back to the `db` service when that is blank. So one `.env` works on
+  both paths and you do not have to keep editing it.
 - **`DB_HOST_PORT` is 5433 on purpose.** If you already have Postgres installed
   on 5432, publishing the container on 5432 too would fail to start. Connect
   pgAdmin to `localhost:5433` to inspect the container's database.
@@ -109,6 +113,63 @@ Two notes that save time:
 ```bash
 docker compose exec db psql -U postgres -d native_upload -c "select * from files;"
 ```
+
+---
+
+## Hosting it against your own Postgres
+
+The quick start brings its own Postgres, which is what you want for testing. On
+a real server you probably already have a database — RDS, Neon, Supabase, or one
+your team runs. Point the API at that instead of running a second Postgres.
+
+1. Create an empty database on it first. Docker runs the migrations, not
+   `db:create`, so the database has to exist already — the `files` table does
+   not, that gets created for you.
+
+2. Put the details in `.env`. The last two are the ones that matter — with
+   Docker they are read instead of the `db` service:
+
+   ```bash
+   DB_NAME=native_upload
+   DB_USERNAME=your_user
+   DB_PASSWORD=your_password
+
+   DB_HOST_DOCKER=your-db-host.example.com
+   DB_PORT_DOCKER=5432
+   ```
+
+3. Start the API on its own, so the bundled Postgres stays out of the way:
+
+   ```bash
+   docker compose up -d --build --no-deps api
+   ```
+
+   `--no-deps` is the part to remember. Without it compose starts the `db`
+   container too, because the API still depends on it for the testing path.
+
+4. Watch the first boot. Migrations run on every start, so the `files` table
+   turns up in your database on its own:
+
+   ```bash
+   docker compose logs -f api
+   ```
+
+If it does not come up, it is usually one of these three:
+
+- **SSL.** Managed Postgres normally insists on it, and `config/db.js` sends no
+  SSL options at all. Add `dialectOptions` there if your provider refuses the
+  connection.
+- **The database name.** `DB_NAME` has to match a database that already exists,
+  spelled exactly.
+- **Firewall.** The database has to allow connections from the server's IP, not
+  only from your laptop.
+
+To go back to the bundled Postgres, blank out `DB_HOST_DOCKER` and
+`DB_PORT_DOCKER` and run `docker compose up -d` as usual. Nothing else changes.
+
+Two things this still does not do for you: there is **no authentication** (see
+Notes at the bottom), and `HOST_PORT` publishes the API straight onto the host,
+so put it behind nginx or a load balancer before anyone outside can reach it.
 
 ---
 

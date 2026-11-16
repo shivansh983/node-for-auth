@@ -30,10 +30,10 @@ services:
       - DB_NAME=${DB_NAME:-native_upload}
       - DB_USERNAME=${DB_USERNAME:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:-postgres}
-      # db = service name
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_DIALECT=postgres
+      # blank in .env = the db service above. set DB_HOST_DOCKER to use an external postgres
+      - DB_HOST=${DB_HOST_DOCKER:-db}
+      - DB_PORT=${DB_PORT_DOCKER:-5432}
+      - DB_DIALECT=${DB_DIALECT:-postgres}
       - DB_LOGGING=${DB_LOGGING:-false}
     ports:
       - '${HOST_PORT:-5000}:${PORT:-5000}'
